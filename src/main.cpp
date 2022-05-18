@@ -90,7 +90,8 @@ void rtc_init()
   // отправляем в rtc
   //rtc.setTime(now);
 
-  //rtc.setTime("21:22:10");
+  //rtc.setTime(00, 38, 23, 18, 05, 2022);
+  //rtc.setHMSDMY(HOUR, MIN, SEC, DAY, MONTH, YEAR);
 }
 
 unsigned long timing;
@@ -138,11 +139,11 @@ void printTime()
 
     if (dots_count == 2)
     {
-      Display.print(rtc.getHours() + ":" + rtc.getMinutes());
+      Display.print(Hour_RTC + ":" + Minute_RTC);
     }
     else if(dots_count == 4)
     {
-      Display.print(rtc.getHours() + " " + rtc.getMinutes());
+      Display.print(Hour_RTC + " " + Minute_RTC);
       dots_count = 0;
       
     }
