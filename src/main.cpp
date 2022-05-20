@@ -1,100 +1,14 @@
-#include <Arduino.h>
-#include <WiFi.h>
-#include <NTPClient.h>
-#include <WiFiUdp.h>
-#include <MD_Parola.h>
-#include <MD_MAX72xx.h>
-#include <SPI.h>
-#include <microDS3231.h>
-
-MicroDS3231 rtc;
-
-#define HARDWARE_TYPE MD_MAX72XX::FC16_HW
-
-#define MAX_DEVICES 4
-#define CLK_PIN 18
-#define DATA_PIN 23
-#define CS_PIN 5
-
-
-MD_Parola Display = MD_Parola(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
-
-WiFiUDP ntpUDP;
-// NTPClient timeClient(ntpUDP);
-
-NTPClient timeClient(ntpUDP, "pool.ntp.org", 19800, 60000);
-
-const char *ssid = "Padavan 2.4";
-const char *password = "46684668";
-
-String Time, hour, minute;
-String Formatted_date;
-long currentMillis = 0;
-long previousMillis = 0;
-int interval = 1000;
-
-int flag_dots;
-
-
-
-
-void obtainTime()
-{
-
-  timeClient.forceUpdate();
-
-  Formatted_date = timeClient.getDay() + " ";
-  Serial.println(Formatted_date);
-
-  hour = timeClient.getFormattedTime().substring(0, 2);
-  minute = timeClient.getFormattedTime().substring(3, 5);
-
-  flag_dots++;
-
-  if (flag_dots == 2)
-  {
-    Time = hour + " " + minute;
-  }
-  else if (flag_dots == 4)
-  {
-    Time = hour + ":" + minute;
-    flag_dots = 0;
-  }
-
-  Serial.println(Time);
-  Display.setTextAlignment(PA_CENTER);
-  Display.print(Time);
-  delay(500);
-}
+#include "global.h"
 
 void rtc_init()
 {
-  // проверка наличия модуля на линии i2c
   if (!rtc.begin())
   {
     Serial.println("DS3231 not found");
   }
-
-  // получаем все данные в структуру
-  DateTime now = rtc.getTime();
-
-  // меняем любой параметр
-  //now.year += 5;
-  // now.second;
-  // now.minute;
-  // now.hour;
-  // now.day;
-  // now.date;
-  // now.month;
-
-  // отправляем в rtc
-  //rtc.setTime(now);
-
-  //rtc.setTime(00, 38, 23, 18, 05, 2022);
-  //rtc.setHMSDMY(HOUR, MIN, SEC, DAY, MONTH, YEAR);
 }
 
-unsigned long timing;
+unsigned long timing, timing_2;
 uint8_t dots_count;
 String Hour_RTC, Minute_RTC, Second_RTC;
 
@@ -102,7 +16,7 @@ void printTime()
 {
 
   if (millis() - timing > 500)
-  { 
+  {
     timing = millis();
     DateTime now = rtc.getTime();
 
@@ -141,60 +55,37 @@ void printTime()
     {
       Display.print(Hour_RTC + ":" + Minute_RTC);
     }
-    else if(dots_count == 4)
+    else if (dots_count == 4)
     {
       Display.print(Hour_RTC + " " + Minute_RTC);
       dots_count = 0;
-      
     }
 
     Serial.println(Hour_RTC + ":" + Minute_RTC + ":" + Second_RTC);
-
   }
-  // получаем все данные в структуру и используем их
-  // этот способ быстрее и "легче" вызова отдельных get-функций
-  
-
-  //       sprintf(HOUR_RTC, "%04d", number);
-  // now.hour = 0 + now.hour;
-
-  //   Serial.print(now.hour);
-  // Serial.print(":");
-  // Serial.print(now.minute);
-  // Serial.print(":");
-  // Serial.print(now.second);
-  // Serial.print(" ");
-  // Serial.print(now.day);
-  // Serial.print(" ");
-  // Serial.print(now.date);
-  // Serial.print("/");
-  // Serial.print(now.month);
-  // Serial.print("/");
-  // Serial.println(now.year);
-
 }
 
-
-
-void wifi_init()
+void printData()
 {
-  Serial.begin(115200);
-  WiFi.begin(ssid, password);
-  Serial.println();
-  Serial.print("Connecting");
-  while (WiFi.status() != WL_CONNECTED)
+
+  if (millis() - timing > 500)
   {
-    delay(200);
-    Serial.print(".");
+    timing = millis();
+
+    Display.setTextAlignment(PA_CENTER);
+
+    Display.print(rtc.getDateString().substring(0, 5));
+
+    Serial.println(rtc.getDateString().substring(0, 5));
   }
-  Serial.println();
-  Serial.println("Wi-Fi Connected");
 }
+
+
 
 void display_init()
 {
   Display.begin();
-  Display.setIntensity(0);
+  Display.setIntensity(3);
   Display.displayClear();
 }
 
@@ -204,22 +95,83 @@ void ntp_time_init()
   timeClient.setTimeOffset(18000);
 }
 
-
-
 void setup()
 {
+
   wifi_init();
   rtc_init();
   display_init();
   ntp_time_init();
+  buzer_init();
 }
 
+int count;
+bool data_flag, time_flag;
+int brightnes;
+
+uint8_t mode_display()
+{
+  if (millis() - timing_2 > 1000)
+  {
+    timing_2 = millis();
+    count++;
+    brightnes = map(analogRead(GPIO_NUM_34), 2000, 4095, 0, 10);
+    // Display.setIntensity(brightnes);
+    Serial.println(brightnes);
+  }
+
+  if (count < 20)
+  {
+
+    return 1;
+  }
+  if (count > 20)
+  {
+    printData();
+  }
+  if (count > 22)
+  {
+    count = 0;
+    return 2;
+  }
+}
+
+void display_task()
+{
+  switch (mode_display())
+  {
+  case 1:
+    printTime();
+    break;
+  case 2:
+    printData();
+    break;
+
+  default:
+    break;
+  }
+}
+
+bool check_wifi;
+unsigned long check_wifi_count;
 void loop()
 {
-  // obtainTime();
+  if (millis() - check_wifi_count > 10000)
+  {
+    check_wifi_count = millis();
+    check_wifi = false;
 
-  // clock_tick();
+    if (!wifi_ceck())
+    {
+      Serial.println("no connect");
+    }
+    else
+    {
+      Serial.println("connected");
+    }
 
-  printTime();
-  
+    check_wifi = true;
+  }
+
+  display_task();
 }
